@@ -1,0 +1,268 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String  @map("user_id")
+  type               String
+  provider           String
+  providerAccountId  String  @map("provider_account_id")
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String? @db.Text
+  session_state      String?
+ 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+ 
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+ 
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+ 
+  @@map("sessions")
+}
+ 
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime? @map("email_verified")
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+ 
+  @@map("users")
+  schooluser SchoolUsers? @relation(fields: [email],references: [email])
+}
+ 
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+ 
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+
+model SchoolUsers{
+    id String @id @unique
+   first_name String 
+   last_name String 
+   phone String 
+   address String 
+   email String? @unique
+   role Role @default(STUDENT)
+   department Departments @relation(fields: [departmentId], references: [id])
+   departmentId Int
+   semestersEnrolled SemesterEnrollments[]
+   unitsEnrolled UnitEnrollments[]
+   results Results[]
+   createdTickets Tickets[] @relation("createdTickets")
+   assignedToTickets Tickets[] @relation("assignedToTickets")
+   enrolledCourse CourseEnrollments[]
+   assignedTasks TicketTasks[] @relation("assignedTasks")
+   createdTasks TicketTasks[] @relation("createdTasks")
+   Departments Departments? @relation("headOfDepartment")
+   unitsTaught Units[]
+   User User?
+}
+
+
+enum Role{
+  STUDENT
+  TEACHER
+  STAFF
+  ADMIN
+}
+model Departments{
+  id Int @id @default(autoincrement())
+  code String @unique
+  name String
+  headOfDepartment SchoolUsers? @relation("headOfDepartment",fields: [headOfDepartmentId],references: [id])
+  headOfDepartmentId String? @unique
+  user SchoolUsers[]
+  Course Courses[]
+  Tickets Tickets[]
+}
+model Courses{
+  id Int @id @default(autoincrement())
+  code String @unique
+  name String
+  department Departments @relation(fields: [departmentId],references: [id])
+  departmentId Int
+  Unit Units[]
+  courseEnrollments CourseEnrollments[]
+}
+model CourseEnrollments{
+  id Int @id @default(autoincrement())
+  student SchoolUsers @relation(fields: [studentId],references: [id])
+  studentId String 
+  course Courses @relation(fields: [courseId],references: [id])
+  courseId Int
+  date_enrolled DateTime @default(now())
+  status COURSESTATUS @default(INPROGRESS)
+}
+enum COURSESTATUS{
+  INPROGRESS
+  DEFFERED
+  COMPLETED
+}
+
+model Units{
+  id Int @id @default(autoincrement())
+  code String
+  name String
+  course_year Int
+  course_semester Int
+  teacher SchoolUsers @relation(fields: [teacherId],references: [id])
+  teacherId String
+  course Courses @relation(fields: [courseId], references: [id])
+  courseId Int
+  exams Exams[]
+  enrollmentHistory UnitEnrollments[]
+}
+
+model UnitEnrollments{
+  id Int @id @default(autoincrement())
+  unit Units @relation(fields: [unitId],references: [id])
+  unitId Int
+  semester Semesters @relation(fields: [semesterId], references: [id])
+  semesterId Int
+  student SchoolUsers @relation(fields: [studentId],references: [id])
+  studentId String
+}
+
+model Semesters{
+  id Int @id @default(autoincrement())
+  start_date DateTime
+  end_date DateTime
+  exams Exams[]
+  unit UnitEnrollments[]
+}
+
+model SemesterEnrollments{
+  id Int @id @default(autoincrement())
+  student SchoolUsers @relation(fields: [studentId],references: [id])
+  studentId String
+}
+model Exams{
+  id Int @id @default(autoincrement())
+  date_done DateTime
+  unit Units @relation(fields: [unitId],references: [id])
+  unitId Int
+  semester Semesters @relation(fields: [semesterId],references: [id])
+  semesterId Int
+  results Results[]
+} 
+
+model Results{
+  id Int @id @default(autoincrement())
+  marks Decimal
+  date_added DateTime @updatedAt
+  exams Exams @relation(fields: [examId],references: [id])
+  examId Int
+  student SchoolUsers @relation(fields: [studentId],references: [id])
+  studentId String
+}
+model TicketChats{
+  id String @id @unique
+  ticket Tickets @relation(fields: [ticketId],references: [id])
+  ticketId Int @unique
+}
+model Tickets{
+  id Int @id @default(autoincrement())
+  title String 
+  description String
+  priority PRIORITY @default(NORMAL)
+  raisedBy SchoolUsers @relation("createdTickets",fields: [raisedById],references: [id])
+  raisedById String
+  assignedTo SchoolUsers? @relation("assignedToTickets",fields: [assignedToId],references: [id])
+  assignedToId String? 
+  department Departments @relation(fields: [departmentId],references: [id])
+  departmentId Int
+  type TicketType @default(HELPDESK)
+  escalation EscalationLevel @default(NONE)
+  status TicketStatus @default(UNREAD)
+  date_created DateTime @default(now())
+  last_update DateTime @updatedAt
+  TicketHistory TicketHistories[]
+  chat TicketChats?
+  tasks TicketTasks[]
+}
+ enum PRIORITY{
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+ }
+
+model TicketHistories{
+  id Int @id @default(autoincrement())
+  date_created DateTime @default(now())
+  ticket Tickets @relation(fields: [ticketId], references: [id])
+  ticketId Int
+  message String 
+}
+enum TicketType{
+  HELPDESK
+  REPORT
+}
+enum EscalationLevel{
+  NONE
+  DELAYED
+  REASSIGNED1
+  REASSIGNED2
+}
+
+enum TicketStatus{
+  UNREAD
+  OPENED
+  INPROGRESS
+  INACTIVE
+  COMPLETED
+}
+
+model TicketTasks{
+id Int @id @default(autoincrement())
+title String
+description String 
+priority PRIORITY @default(NORMAL)
+expected_completion_date DateTime
+date_completed DateTime
+status TASKSTATUS  @default(NOTSTARTED)
+assigned_to SchoolUsers @relation("assignedTasks", fields: [assignedToUserId],references: [id])
+created_by  SchoolUsers @relation("createdTasks",fields: [createdByUserId],references: [id])
+assignedToUserId String
+createdByUserId String
+ticket Tickets @relation(fields: [ticketId],references: [id])
+ticketId Int
+}
+
+
+enum TASKSTATUS{
+  NOTSTARTED
+  INPROGRESS
+  COMPLETED
+}
